@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Flow 1 · Navigate and create</title>
+  <link rel="stylesheet" href="training.css">
+</head>
+<body>
+  <header>
+    <p class="kicker">Flow 1 · Navigate the repo and create something new</p>
+    <h1>Where a change is allowed to land</h1>
+    <p class="lede">Choose a change. The tree marks the nodes that own it. Two of the changes are blocked: the extension does not open a socket, and this version does not grow a bank client.</p>
+    <nav aria-label="Training">
+      <a href="index.html">Start</a>
+      <a href="navigate.html" aria-current="page">Flow 1 · Navigate</a>
+      <a href="wired.html">Flow 2 · Wired</a>
+      <a href="../01-navigate-and-create.md">Written guide</a>
+    </nav>
+  </header>
+  <main class="layout">
+    <section class="tree" aria-label="Repository and specified targets">
+      <p class="group-label">Checked in on this branch</p>
+      <div class="node branch" data-node="readme">README.md</div>
+      <div class="node branch" data-node="training">docs/training/</div>
+      <p class="group-label">Specification, draft PR 1</p>
+      <div class="node branch" data-node="spec">docs/ios-sms-filter-spec.md</div>
+      <div class="node branch" data-node="arch">docs/ios-mobile-architecture.md</div>
+      <div class="node branch" data-node="userflow">docs/ios-user-flow.md</div>
+      <p class="group-label">Specified, not checked in · containing app</p>
+      <div class="node branch" data-node="app">SMSFilter</div>
+      <div class="node branch" data-node="enable">EnableFilterView</div>
+      <div class="node branch" data-node="sent">DataSentView</div>
+      <div class="node branch" data-node="junkview">FilteredMessageView</div>
+      <div class="node branch" data-node="opener">SettingsOpener</div>
+      <p class="group-label">Extension and FilterCore</p>
+      <div class="node branch" data-node="extension">MessageFilterExtension</div>
+      <div class="node branch" data-node="plist">Info.plist network URL</div>
+      <div class="node branch" data-node="core">FilterCore</div>
+      <div class="node branch" data-node="gate">QueryGate</div>
+      <div class="node branch" data-node="decoder">ServerDecisionDecoder</div>
+      <div class="node branch" data-node="mapper">ActionMapper</div>
+      <div class="node branch" data-node="decide">decide</div>
+      <p class="group-label">Server contract</p>
+      <div class="node branch" data-node="server">classification host</div>
+      <div class="node branch" data-node="redact">redact</div>
+      <div class="node branch" data-node="policy">policy and reason codes</div>
+      <div class="node branch" data-node="laya">Laya</div>
+    </section>
+    <section class="detail" aria-live="polite">
+      <div class="scenarios" role="group" aria-label="Changes">
+        <button type="button" data-scenario="decision">Record a decision</button>
+        <button type="button" data-scenario="screen">Add a screen</button>
+        <button type="button" data-scenario="reason">Add a reason code</button>
+        <button type="button" data-scenario="socket">Extension opens a socket</button>
+        <button type="button" data-scenario="android">Add Android</button>
+        <button type="button" data-scenario="bank">Confirm with the bank</button>
+      </div>
+      <h2 id="detail-title">Pick a change</h2>
+      <div id="detail-body">
+        <p>Each button is a change a developer might start. The highlight is the target. A red highlight means the change has no target.</p>
+      </div>
+    </section>
+  </main>
+  <footer>
+    <p>Same six cases as <a href="../01-navigate-and-create.md">the written guide</a>.</p>
+  </footer>
+  <script>
+    const scenarios = {
+      decision: {
+        title: "Record a product decision",
+        blocked: false,
+        nodes: ["spec", "training"],
+        target: "docs/",
+        add: "A markdown specification with the behavior, what is out of scope, and an acceptance check.",
+        leave: "Application targets. A decision is written before a target exists.",
+        acceptance: "A reader can tell what the phone does, what the server does, and which failures leave the message in the inbox."
+      },
+      screen: {
+        title: "Add a screen to the containing app",
+        blocked: false,
+        nodes: ["app", "enable"],
+        target: "SMSFilter, on the one NavigationStack",
+        add: "A SwiftUI view. Copy is the product. No account, no message list, no score.",
+        leave: "FilterCore, the extension, and every network client. The app cannot learn that a message was junked.",
+        acceptance: "The screen never describes a message as credible, safe, or verified, and it does not deep-link into Messages settings."
+      },
+      reason: {
+        title: "Add a server reason code",
+        blocked: false,
+        nodes: ["policy", "decoder", "spec"],
+        target: "Server policy and FilterCore.ServerDecision.Reason",
+        add: "The reason on the server, the Decodable case, and a row in the specification. Decoding stays strict.",
+        leave: "The extension's branch. It maps junk or inbox and discards reason. is_spam still does not file Junk.",
+        acceptance: "A body with the new reason and action junk can be junked. An unrecognized reason stays in the inbox."
+      },
+      socket: {
+        title: "Let the extension open the connection",
+        blocked: true,
+        nodes: ["extension", "plist"],
+        target: "Nowhere. This change is refused by the platform.",
+        add: "Nothing. Messages is the only process that posts.",
+        leave: "URLSession stays out of the extension. One deferQueryRequestToNetwork per query, after QueryGate has both a sender and a body.",
+        acceptance: "The extension still has no network client. A missing associated domain still leaves the message in the inbox."
+      },
+      android: {
+        title: "Add Android",
+        blocked: false,
+        nodes: ["spec"],
+        target: "A new specification under docs/",
+        add: "A platform spec. Android can redact on the phone and can warn inside the inbox. That is a different surface.",
+        leave: "The iOS extension. Junk stays the only iOS warning. One deferral, server-side redaction, and delivery to the inbox when the server cannot decide stay as written.",
+        acceptance: "The Android spec does not classify iMessage or Contacts, and it does not rewrite the iOS rules."
+      },
+      bank: {
+        title: "Confirm the event with the bank",
+        blocked: true,
+        nodes: ["spec", "junkview"],
+        target: "Not this version. A bank API is a new problem, not a flag on Laya.",
+        add: "Nothing inside the filter. The extension holds no account and no bank client.",
+        leave: "The classifier answers whether the text looks like a fake bank request.",
+        acceptance: "FilteredMessageView still tells the person to open the bank's own app. The filter does not claim the bank registered the event."
+      }
+    };
+
+    const title = document.getElementById("detail-title");
+    const body = document.getElementById("detail-body");
+    const buttons = document.querySelectorAll("[data-scenario]");
+
+    function show(id) {
+      const item = scenarios[id];
+      document.querySelectorAll("[data-node]").forEach((node) => {
+        const on = item.nodes.includes(node.dataset.node);
+        node.classList.toggle("is-on", on);
+        node.classList.toggle("blocked", on && item.blocked);
+      });
+      buttons.forEach((button) => {
+        button.setAttribute("aria-pressed", String(button.dataset.scenario === id));
+      });
+      title.textContent = item.title;
+      const flag = item.blocked ? '<p class="blocked-flag">NO TARGET</p>' : "";
+      body.innerHTML = flag +
+        "<dl>" +
+        "<dt>Lives in</dt><dd>" + item.target + "</dd>" +
+        "<dt>Add</dt><dd>" + item.add + "</dd>" +
+        "<dt>Leave untouched</dt><dd>" + item.leave + "</dd>" +
+        "<dt>Acceptance</dt><dd>" + item.acceptance + "</dd>" +
+        "</dl>";
+      const first = document.querySelector('[data-node="' + item.nodes[0] + '"]');
+      if (first) first.scrollIntoView({ block: "nearest" });
+    }
+
+    buttons.forEach((button) => {
+      button.addEventListener("click", () => show(button.dataset.scenario));
+    });
+  </script>
+</body>
+</html>

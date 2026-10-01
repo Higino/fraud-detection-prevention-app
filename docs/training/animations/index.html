@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Developer training</title>
+  <link rel="stylesheet" href="training.css">
+</head>
+<body>
+  <header>
+    <p class="kicker">Fraud detection prevention · developer training</p>
+    <h1>Two flows</h1>
+    <p class="lede">Flow 1 is the map of the repository and the targets a new change is allowed to touch. Flow 2 steps one message through FilterCore and the server it is wired to.</p>
+    <nav aria-label="Training">
+      <a href="index.html" aria-current="page">Start</a>
+      <a href="navigate.html">Flow 1 · Navigate</a>
+      <a href="wired.html">Flow 2 · Wired</a>
+      <a href="../README.md">Written guide</a>
+    </nav>
+  </header>
+  <main>
+    <div class="cards">
+      <a class="card" href="navigate.html">
+        <span class="num">01</span>
+        <h2>Navigate and create</h2>
+        <p>Pick a change. The map marks the target that owns it, and the two changes that have no target.</p>
+      </a>
+      <a class="card" href="wired.html">
+        <span class="num">02</span>
+        <h2>Core, wired to the phone</h2>
+        <p>Watch a text move from Messages through one deferral, the server pipeline, and back to Junk or the inbox.</p>
+      </a>
+    </div>
+  </main>
+  <footer>
+    <p>The classification core is FilterCore plus the server pipeline. The phone is wired through Apple's message-filter deferral. There is no core-v2 package and no IoT bus in this repository.</p>
+  </footer>
+</body>
+</html>

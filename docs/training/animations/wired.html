@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Flow 2 · Core wired to the phone</title>
+  <link rel="stylesheet" href="training.css">
+</head>
+<body>
+  <header>
+    <p class="kicker">Flow 2 · Classification core, wired to the phone</p>
+    <h1>One message, one deferral</h1>
+    <p class="lede">FilterCore decides from the server's reply. Messages is the process that posts. The containing app is drawn beside the path because it is not on it.</p>
+    <nav aria-label="Training">
+      <a href="index.html">Start</a>
+      <a href="navigate.html">Flow 1 · Navigate</a>
+      <a href="wired.html" aria-current="page">Flow 2 · Wired</a>
+      <a href="../02-how-the-core-is-wired.md">Written guide</a>
+    </nav>
+  </header>
+  <main>
+    <div class="transport" role="group" aria-label="Playback">
+      <button type="button" id="prev">Previous</button>
+      <button type="button" id="play">Pause</button>
+      <button type="button" id="next">Next</button>
+      <span class="chip" id="step-label" aria-live="polite">1 / 1</span>
+    </div>
+    <div class="scenarios" role="group" aria-label="Runs">
+      <button type="button" data-run="link">Link mismatch</button>
+      <button type="button" data-run="smish">Smishing language</button>
+      <button type="button" data-run="otp">Genuine code</button>
+      <button type="button" data-run="fail">Request fails</button>
+      <button type="button" data-run="skip">Not offered</button>
+    </div>
+    <div class="layout">
+      <div class="board" id="board">
+        <article class="stage" data-focus="messages">
+          <h3>Messages</h3>
+          <p>Inbox, Junk, and the system HTTPS client. This is the only process that opens a socket.</p>
+        </article>
+        <article class="stage" data-focus="extension">
+          <h3>MessageFilterExtension</h3>
+          <p>QueryGate, then at most one deferQueryRequestToNetwork. No URLSession.</p>
+        </article>
+        <article class="stage" data-focus="server">
+          <h3>Classification server</h3>
+          <p>Operated for this app. The text is not forwarded to a hosted Laya API.</p>
+          <div class="subs">
+            <div class="sub" data-focus="redact"><h3>Redact</h3><p>Drop codes and card numbers before Laya and before any log.</p></div>
+            <div class="sub" data-focus="domains"><h3>Domains</h3><p>Extract link domains. Note a phone number if one is present.</p></div>
+            <div class="sub" data-focus="rules"><h3>Domain rule</h3><p>A bank name plus a foreign domain is junk, reason link_domain.</p></div>
+            <div class="sub" data-focus="laya"><h3>Laya</h3><p>Already loaded. is_smishing, is_spam, asks_to_continue_off_app.</p></div>
+          </div>
+        </article>
+        <article class="stage" data-focus="core">
+          <h3>FilterCore</h3>
+          <p>Decode the body, map junk or none, drop the system types. Unknown JSON becomes inbox.</p>
+        </article>
+        <article class="stage" data-focus="junk">
+          <h3>Junk</h3>
+          <p>ILMessageFilterAction.junk, sub-action none. Junk is the whole warning.</p>
+        </article>
+        <article class="stage" data-focus="inbox">
+          <h3>Inbox</h3>
+          <p>Action none. The message was delivered. It was not certified as genuine.</p>
+        </article>
+        <p class="packet" id="packet"></p>
+      </div>
+      <aside class="panel">
+        <h2 id="run-title">Link mismatch</h2>
+        <p class="caption" id="caption"></p>
+        <p class="outcome" id="outcome"></p>
+        <pre class="json" id="json"></pre>
+        <div class="apart">
+          <strong>SMSFilter containing app</strong>
+          <p>Enable, What is sent, and If a message was filtered. No shared memory, no app group, and no arrow to the extension. It cannot tell whether the filter is selected.</p>
+        </div>
+      </aside>
+    </div>
+  </main>
+  <footer>
+    <p>Until the high threshold is fitted on held-out genuine alerts and one-time codes, the server may return junk only for link_domain. Same five runs as <a href="../02-how-the-core-is-wired.md">the written guide</a>.</p>
+  </footer>
+  <script>
+    const requestJson = `{
+  "_version": 1,
+  "query": {
+    "sender": "14085550001",
+    "message": { "text": "We locked your card. Confirm at the link." }
+  },
+  "app": { "version": "1" }
+}`;
+
+    const runs = {
+      link: {
+        title: "Link domain is not the bank",
+        bubble: "We locked your card. Confirm at pay-lock.example",
+        outcome: "junk",
+        outcomeText: "Under Junk. Reason link_domain. Laya was not required.",
+        steps: [
+          { focus: "messages", json: "", text: "An SMS arrives from a sender who is not in Contacts. Messages offers it to the filter. iMessage and Contacts never take this step." },
+          { focus: "extension", json: "", text: "QueryGate sees a sender and a body, so the extension may defer. It does not inspect the link. A missing field would skip the deferral and stay in the inbox." },
+          { focus: "messages", json: requestJson, text: "One call: deferQueryRequestToNetwork. Messages posts Apple's JSON to the URL fixed in Info.plist. The extension still has no socket." },
+          { focus: "redact", json: requestJson, text: "The server copies the text and replaces one-time codes and card numbers. The original digits are dropped before classification and before any log." },
+          { focus: "domains", json: requestJson, text: "It extracts the link domain. The text names a bank. pay-lock.example is not that bank's domain." },
+          { focus: "rules", json: '{ "action": "junk", "reason": "link_domain" }', text: "The domain rule fires. The action is junk, reason link_domain. The reply has no weights and no prompt text." },
+          { focus: "core", json: '{ "action": "junk", "reason": "link_domain" }', text: "HTTP 200. ServerDecisionDecoder accepts the body. ActionMapper maps junk to FilterDecision.junk. The server has already discarded the text. The sender is not logged." },
+          { focus: "junk", json: '{ "action": "junk", "reason": "link_domain" }', text: "The extension sets action junk and sub-action none. The text is under Junk. The containing app is not told. Nothing calls the message safe or verified." }
+        ]
+      },
+      smish: {
+        title: "Smishing language, after the threshold is fitted",
+        bubble: "Your card is blocked. Call this number and read the code.",
+        outcome: "junk",
+        outcomeText: "Under Junk. Reason smishing_language. The extension ignores reason and maps junk the same way.",
+        steps: [
+          { focus: "messages", json: "", text: "Unknown sender, SMS. There is no link, so the domain rule cannot fire. Messages still offers the query." },
+          { focus: "extension", json: "", text: "Sender and body are present. The extension defers once and does not score the wording itself." },
+          { focus: "messages", json: requestJson, text: "Messages posts the sender and the raw text. Redaction of any digits still happens on the server, not on the phone." },
+          { focus: "redact", json: requestJson, text: "Digit secrets are replaced with a flag. The original digits are dropped." },
+          { focus: "domains", json: requestJson, text: "No link domain belongs to a named bank. The domain rule does not junk this message." },
+          { focus: "laya", json: requestJson, text: "Laya is already loaded. It is asked is_smishing, is_spam, and asks_to_continue_off_app. is_spam alone does not file Junk." },
+          { focus: "rules", json: '{ "action": "junk", "reason": "smishing_language" }', text: "is_smishing and confidence are both at or above the fitted high threshold. Action junk, reason smishing_language. This path stays off until held-out genuine alerts and one-time codes receive none." },
+          { focus: "core", json: '{ "action": "junk", "reason": "smishing_language" }', text: "The decoder checks action and reason, then discards reason. The extension does not branch on it." },
+          { focus: "junk", json: '{ "action": "junk", "reason": "smishing_language" }', text: "Same Junk action as a link mismatch. Sub-action none. No promotion folder and no transaction folder." }
+        ]
+      },
+      otp: {
+        title: "A genuine one-time code",
+        bubble: "Your code is 482193. We will never ask you to read it aloud.",
+        outcome: "inbox",
+        outcomeText: "Stays in the inbox. A low or middle score is delivery, not a certificate that the sender is the bank.",
+        steps: [
+          { focus: "messages", json: "", text: "Unknown sender. The text is a one-time code of the kind held out when the threshold is fitted." },
+          { focus: "extension", json: "", text: "The extension defers. It cannot redact the code. The phone does not build the classification request." },
+          { focus: "redact", json: requestJson, text: "The server replaces the code with a flag such as contains_one_time_code and drops the digits before Laya." },
+          { focus: "laya", json: requestJson, text: "The score stays under the high threshold. Held-out genuine alerts and one-time-code texts must receive none." },
+          { focus: "rules", json: '{ "action": "none", "reason": "none" }', text: "Anything short of the high-confidence cases, including a middle score, is action none. iOS cannot show a softer warning, so the message is delivered." },
+          { focus: "core", json: '{ "action": "none", "reason": "none" }', text: "ActionMapper maps none to inbox. The extension will set ILMessageFilterAction.none." },
+          { focus: "inbox", json: '{ "action": "none", "reason": "none" }', text: "The text stays in the inbox. No screen describes it as credible, safe, or verified. A request for a code is still handled in the bank's own app." }
+        ]
+      },
+      fail: {
+        title: "The request fails",
+        bubble: "We locked your card. Confirm at the link.",
+        outcome: "inbox",
+        outcomeText: "Stays in the inbox. Timeout, a bad body, and an unauthorized domain end here.",
+        steps: [
+          { focus: "messages", json: "", text: "Unknown SMS. This run is a timeout. An unauthorized associated domain, an HTTP status other than 200, or a body that does not decode takes the same ending." },
+          { focus: "extension", json: "", text: "QueryGate allows one deferral. The extension cannot retry. A second deferral would fail with redundantNetworkDeferral." },
+          { focus: "messages", json: requestJson, text: "Messages attempts the post. The host is authorized in this telling, and the network does not answer." },
+          { focus: "core", json: "", text: "DeferralOutcome is transportFailed. decide returns inbox. FilterCore is not asked to read a body. On a bad body, strict decode fails the same way." },
+          { focus: "inbox", json: "", text: "The message stays in the inbox. A dead classifier must not swallow a real bank alert." }
+        ]
+      },
+      skip: {
+        title: "Messages never offers it",
+        bubble: "Lunch at noon?",
+        outcome: "skip",
+        outcomeText: "Not posted. iMessage and senders in Contacts are outside the filter.",
+        steps: [
+          { focus: "messages", json: "", text: "The sender is in Contacts, or the message is iMessage. Messages does not construct the extension and does not post to the classification URL." },
+          { focus: "inbox", json: "", text: "It appears in the conversation. The server, Laya, and FilterCore are idle." }
+        ]
+      }
+    };
+
+    const packet = document.getElementById("packet");
+    const board = document.getElementById("board");
+    const caption = document.getElementById("caption");
+    const outcome = document.getElementById("outcome");
+    const json = document.getElementById("json");
+    const runTitle = document.getElementById("run-title");
+    const stepLabel = document.getElementById("step-label");
+    const playButton = document.getElementById("play");
+    const runButtons = document.querySelectorAll("[data-run]");
+
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let runId = "link";
+    let step = 0;
+    let playing = !reduceMotion;
+    let timer = null;
+
+    function focusElements(name) {
+      return document.querySelectorAll('[data-focus="' + name + '"]');
+    }
+
+    function placePacket(name) {
+      const el = focusElements(name)[0];
+      if (!el) return;
+      if (window.matchMedia("(max-width: 800px)").matches) {
+        packet.style.transform = "none";
+        if (el.nextElementSibling !== packet && el !== packet) {
+          el.insertAdjacentElement("beforeend", packet);
+        }
+        return;
+      }
+      if (packet.parentElement !== board) board.appendChild(packet);
+      const boardRect = board.getBoundingClientRect();
+      const rect = el.getBoundingClientRect();
+      const x = Math.max(8, rect.right - boardRect.left - packet.offsetWidth - 12);
+      const y = Math.max(8, rect.top - boardRect.top + 10);
+      packet.style.transform = "translate(" + x + "px, " + y + "px)";
+    }
+
+    function render() {
+      const run = runs[runId];
+      const current = run.steps[step];
+      runTitle.textContent = run.title;
+      caption.textContent = current.text;
+      stepLabel.textContent = (step + 1) + " / " + run.steps.length;
+      packet.textContent = run.bubble;
+      json.textContent = current.json || "—";
+      const last = step === run.steps.length - 1;
+      outcome.textContent = last ? run.outcomeText : "In flight.";
+      outcome.className = "outcome" + (last ? " is-" + run.outcome : "");
+      document.querySelectorAll("[data-focus]").forEach((el) => {
+        el.classList.remove("is-live", "is-junk", "is-inbox");
+      });
+      focusElements(current.focus).forEach((el) => {
+        el.classList.add("is-live");
+        if (last && run.outcome === "junk") el.classList.add("is-junk");
+        if (last && (run.outcome === "inbox" || run.outcome === "skip")) el.classList.add("is-inbox");
+      });
+      if (current.focus === "redact" || current.focus === "domains" || current.focus === "rules" || current.focus === "laya") {
+        focusElements("server").forEach((el) => el.classList.add("is-live"));
+      }
+      runButtons.forEach((button) => {
+        button.setAttribute("aria-pressed", String(button.dataset.run === runId));
+      });
+      playButton.textContent = playing ? "Pause" : "Play";
+      playButton.setAttribute("aria-pressed", String(playing));
+      placePacket(current.focus);
+    }
+
+    function stop() {
+      playing = false;
+      if (timer) clearInterval(timer);
+      timer = null;
+    }
+
+    function start() {
+      playing = true;
+      if (timer) clearInterval(timer);
+      timer = setInterval(() => {
+        const run = runs[runId];
+        if (step >= run.steps.length - 1) {
+          stop();
+          render();
+          return;
+        }
+        step += 1;
+        render();
+      }, 2600);
+      render();
+    }
+
+    function go(nextStep) {
+      const run = runs[runId];
+      step = Math.max(0, Math.min(run.steps.length - 1, nextStep));
+      render();
+    }
+
+    function selectRun(id) {
+      runId = id;
+      step = 0;
+      if (playing) start();
+      else render();
+    }
+
+    document.getElementById("prev").addEventListener("click", () => { stop(); go(step - 1); });
+    document.getElementById("next").addEventListener("click", () => { stop(); go(step + 1); });
+    playButton.addEventListener("click", () => {
+      if (playing) stop();
+      else {
+        if (step >= runs[runId].steps.length - 1) step = 0;
+        start();
+      }
+      render();
+    });
+    runButtons.forEach((button) => {
+      button.addEventListener("click", () => selectRun(button.dataset.run));
+    });
+    window.addEventListener("resize", () => placePacket(runs[runId].steps[step].focus));
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowRight") { stop(); go(step + 1); }
+      if (event.key === "ArrowLeft") { stop(); go(step - 1); }
+      if (event.key === " ") { event.preventDefault(); playButton.click(); }
+    });
+
+    selectRun("link");
+  </script>
+</body>
+</html>
